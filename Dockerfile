@@ -1,35 +1,27 @@
-# Stage 1: Build stage
-FROM python:3.11-slim AS build
+# Sử dụng image Ubuntu làm base
+FROM ubuntu:20.04
 
+# Cài đặt Apache và các gói cần thiết
+RUN apt-get update && \
+    apt-get install -y apache2 python3 python3-pip python3-venv apache2-utils libapache2-mod-wsgi-py3
+
+# Tạo thư mục cho ứng dụng
 WORKDIR /app
 
-# Sao chép tệp yêu cầu
-COPY requirements.txt .
+# Copy ứng dụng vào container
+COPY . /app
 
-# Cài đặt các thư viện Python
-RUN pip install --no-cache-dir -r requirements.txt
+# Cài đặt các phụ thuộc Python
+RUN pip3 install --upgrade pip && \
+    pip3 install -r requirements.txt
 
-# Sao chép mã nguồn ứng dụng
-COPY . .
+# Cấu hình Apache để sử dụng mod_wsgi
+COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
 
-# Stage 2: Runtime stage
-FROM httpd:alpine
-
-# Cài đặt Apache mod_proxy
-RUN apk add --no-cache apache2-utils \
-    && sed -i '/^#LoadModule proxy_module/s/^#//' /usr/local/apache2/conf/httpd.conf \
-    && sed -i '/^#LoadModule proxy_http_module/s/^#//' /usr/local/apache2/conf/httpd.conf
-
-# Sao chép mã nguồn từ build stage vào image
-COPY --from=build /app /usr/local/apache2/htdocs/app
-
-# Cấu hình Apache để reverse proxy đến Flask app
-RUN echo 'ProxyPass / http://localhost:8000/' >> /usr/local/apache2/conf/httpd.conf \
-    && echo 'ProxyPassReverse / http://localhost:8000/' >> /usr/local/apache2/conf/httpd.conf
-
-# Expose port 80
+# Mở cổng 80
 EXPOSE 80
 
-# Khởi chạy Apache
-CMD ["httpd", "-D", "FOREGROUND"]
+# Khởi động Apache
+CMD ["apachectl", "-D", "FOREGROUND"]
+
 
