@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý người dùng</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="my-4">Quản lý người dùng</h1>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tên người dùng</th>
+                    <th>Vai trò</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user['id'] }}</td>
+                        <td>{{ user['username'] }}</td>
+                        <td>{{ user['role'] }}</td>
+                        <td>
+                            <!-- Form xóa người dùng -->
+                            <form action="{{ url_for('manage_users') }}" method="POST" style="display:inline;">
+                                <input type="hidden" name="delete_user" value="{{ user['id'] }}">
+                                <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                            </form>
+                            
+                            <!-- Form thay đổi vai trò -->
+                            <form action="{{ url_for('manage_users') }}" method="POST" style="display:inline;">
+                                <input type="hidden" name="user_id" value="{{ user['id'] }}">
+                                <select name="new_role" class="form-control form-control-sm" style="display:inline;">
+                                    <option value="admin" {% if user['role'] == 'admin' %}selected{% endif %}>Admin</option>
+                                    <option value="user" {% if user['role'] == 'user' %}selected{% endif %}>User</option>
+                                </select>
+                                <button type="submit" name="change_role" class="btn btn-primary btn-sm">Cập nhật vai trò</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Quay lại trang chính</a>
+    </div>
+</body>
+</html>

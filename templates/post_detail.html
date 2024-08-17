@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ post['title'] }}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Quay lại trang chính</a>
+        <h1 class="my-4">{{ post['title'] }}</h1>
+        <p>{{ post['content'] | safe }}</p>
+        
+        <h2 class="my-4">Bình luận</h2>
+        {% for comment in comments %}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <p><strong>{{ comment['username'] }}:</strong> {{ comment['content'] | safe }}</p>
+                    <p class="text-muted">Posted on {{ comment['created_at'] }}</p>
+                </div>
+            </div>
+        {% endfor %}
+
+        {% if 'username' in session %}
+            <h3 class="my-4">Thêm bình luận</h3>
+            <form action="{{ url_for('post_detail', post_id=post['id']) }}" method="POST">
+                <div class="form-group">
+                    <textarea class="form-control" name="content" rows="3" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Đăng bình luận</button>
+            </form>
+        {% endif %}
+    </div>
+</body>
+</html>
