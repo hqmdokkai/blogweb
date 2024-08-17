@@ -1,26 +1,35 @@
-# Dùng image Python làm base image
+# Stage 1: Build stage
 FROM python:3.11-slim AS build
 
-# Cài đặt các thư viện cần thiết
 WORKDIR /app
-COPY requirements.txt requirements.txt
-RUN pip install -r requirements.txt
 
-# Sao chép mã nguồn vào container
+# Sao chép tệp yêu cầu
+COPY requirements.txt .
+
+# Cài đặt các thư viện Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Sao chép mã nguồn ứng dụng
 COPY . .
 
-# Cài đặt Apache và các module cần thiết
+# Stage 2: Runtime stage
 FROM httpd:alpine
-RUN apk add --no-cache bash
-COPY --from=build /app /app
 
-# Sao chép file cấu hình Apache vào container
-COPY apache-config.conf /usr/local/apache2/conf/httpd.conf
+# Cài đặt Apache mod_proxy
+RUN apk add --no-cache apache2-utils \
+    && sed -i '/^#LoadModule proxy_module/s/^#//' /usr/local/apache2/conf/httpd.conf \
+    && sed -i '/^#LoadModule proxy_http_module/s/^#//' /usr/local/apache2/conf/httpd.conf
+
+# Sao chép mã nguồn từ build stage vào image
+COPY --from=build /app /usr/local/apache2/htdocs/app
+
+# Cấu hình Apache để reverse proxy đến Flask app
+RUN echo 'ProxyPass / http://localhost:8000/' >> /usr/local/apache2/conf/httpd.conf \
+    && echo 'ProxyPassReverse / http://localhost:8000/' >> /usr/local/apache2/conf/httpd.conf
 
 # Expose port 80
 EXPOSE 80
 
-# Khởi động Apache
-CMD ["httpd-foreground"]
-
+# Khởi chạy Apache
+CMD ["httpd", "-D", "FOREGROUND"]
 
