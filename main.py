@@ -1,22 +1,16 @@
 from flask import Flask, render_template_string, render_template, request, redirect, url_for, session
-import mysql.connector
-from mysql.connector import errorcode
+import sqlite3
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Thay đổi khóa bí mật theo yêu cầu
 
-# Cấu hình MySQL
-config = {
-    'user': 'root',
-    'password': 'root',
-    'host': '127.0.0.1',
-    'port': 8889,
-    'database': 'blog_db',
-    'raise_on_warnings': True
-}
+# Cấu hình SQLite3
+DATABASE = 'blog_db.sqlite3'
 
 def get_db_connection():
-    return mysql.connector.connect(**config)
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # Tạo bảng nếu chưa tồn tại
 def create_tables():
@@ -25,29 +19,29 @@ def create_tables():
     try:
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(50) NOT NULL UNIQUE,
-            password VARCHAR(255) NOT NULL,
-            role ENUM('admin', 'user') DEFAULT 'user'
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'user'
         )
         ''')
 
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS posts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(255) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            user_id INT,
+            user_id INTEGER,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
         ''')
 
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS comments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            post_id INT,
-            username VARCHAR(50) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id INTEGER,
+            username TEXT NOT NULL,
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (post_id) REFERENCES posts(id)
@@ -55,7 +49,7 @@ def create_tables():
         ''')
 
         connection.commit()
-    except mysql.connector.Error as err:
+    except sqlite3.Error as err:
         print(f"Error: {err}")
     finally:
         cursor.close()
@@ -132,7 +126,7 @@ index_template = '''
 @app.route('/')
 def index():
     connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
+    cursor = connection.cursor()
     cursor.execute('SELECT * FROM posts ORDER BY created_at DESC')
     posts = cursor.fetchall()
     cursor.close()
@@ -151,8 +145,8 @@ def add_post():
 
         # Lấy user_id từ username
         connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
+        cursor = connection.cursor()
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
         user = cursor.fetchone()
         
         if user is None:
@@ -164,7 +158,7 @@ def add_post():
         
         # Thêm bài viết
         cursor.execute(
-            'INSERT INTO posts (title, content, user_id) VALUES (%s, %s, %s)',
+            'INSERT INTO posts (title, content, user_id) VALUES (?, ?, ?)',
             (title, content, user_id)
         )
         connection.commit()
@@ -175,15 +169,13 @@ def add_post():
 
     return render_template('add_post.html')
 
-
-# Định nghĩa các route khác
 @app.route('/post/<int:post_id>')
 def post_detail(post_id):
     connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute('SELECT * FROM posts WHERE id = %s', (post_id,))
+    cursor = connection.cursor()
+    cursor.execute('SELECT * FROM posts WHERE id = ?', (post_id,))
     post = cursor.fetchone()
-    cursor.execute('SELECT * FROM comments WHERE post_id = %s ORDER BY created_at DESC', (post_id,))
+    cursor.execute('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at DESC', (post_id,))
     comments = cursor.fetchall()
     cursor.close()
     connection.close()
@@ -198,8 +190,8 @@ def login():
         username = request.form['username']
         password = request.form['password']
         connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
+        cursor = connection.cursor()
+        cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
         user = cursor.fetchone()
         cursor.close()
         connection.close()
@@ -212,7 +204,6 @@ def login():
             return "Tên đăng nhập hoặc mật khẩu không đúng", 401
     return render_template('login.html')
 
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -221,12 +212,12 @@ def register():
         connection = get_db_connection()
         cursor = connection.cursor()
         try:
-            cursor.execute('INSERT INTO users (username, password) VALUES (%s, %s)', (username, password))
+            cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
             connection.commit()
             cursor.close()
             connection.close()
             return redirect(url_for('login'))
-        except mysql.connector.Error as err:
+        except sqlite3.Error as err:
             connection.rollback()
             cursor.close()
             connection.close()
@@ -248,13 +239,13 @@ def delete_post(post_id):
     user_id = session.get('user_id')
     
     connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
+    cursor = connection.cursor()
     
     # Kiểm tra bài viết có thuộc về người dùng hay không
     if user_role == 'admin':
-        cursor.execute('SELECT * FROM posts WHERE id = %s', (post_id,))
+        cursor.execute('SELECT * FROM posts WHERE id = ?', (post_id,))
     else:
-        cursor.execute('SELECT * FROM posts WHERE id = %s AND user_id = %s', (post_id, user_id))
+        cursor.execute('SELECT * FROM posts WHERE id = ? AND user_id = ?', (post_id, user_id))
     
     post = cursor.fetchone()
     
@@ -263,21 +254,12 @@ def delete_post(post_id):
         connection.close()
         return "Bài viết không tồn tại hoặc bạn không có quyền xóa bài viết này", 403
     
-    cursor.execute('DELETE FROM posts WHERE id = %s', (post_id,))
+    cursor.execute('DELETE FROM posts WHERE id = ?', (post_id,))
     connection.commit()
     cursor.close()
     connection.close()
     
     return redirect(url_for('index'))
-
-def get_user_id_by_username(username):
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
-    user = cursor.fetchone()
-    cursor.close()
-    connection.close()
-    return user['id'] if user else None
 
 @app.route('/manage_users', methods=['GET', 'POST'])
 def manage_users():
@@ -285,20 +267,20 @@ def manage_users():
         return "Bạn không có quyền thực hiện hành động này", 403
     
     connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
+    cursor = connection.cursor()
     
     if request.method == 'POST':
         # Xử lý xóa người dùng
         if 'delete_user' in request.form:
             user_id_to_delete = request.form['delete_user']
-            cursor.execute('DELETE FROM users WHERE id = %s', (user_id_to_delete,))
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id_to_delete,))
             connection.commit()
         
         # Xử lý thay đổi vai trò
         if 'change_role' in request.form:
             user_id = request.form['user_id']
             new_role = request.form['new_role']
-            cursor.execute('UPDATE users SET role = %s WHERE id = %s', (new_role, user_id))
+            cursor.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
             connection.commit()
     
     cursor.execute('SELECT * FROM users')
