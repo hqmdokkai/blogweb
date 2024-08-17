@@ -1,9 +1,14 @@
 # Sử dụng image Ubuntu làm base
 FROM ubuntu:20.04
 
+# Đặt các biến môi trường để tránh các prompt tương tác
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
 # Cài đặt Apache và các gói cần thiết
 RUN apt-get update && \
-    apt-get install -y apache2 python3 python3-pip python3-venv apache2-utils libapache2-mod-wsgi-py3
+    apt-get install -y apache2 python3 python3-pip python3-venv apache2-utils libapache2-mod-wsgi-py3 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Tạo thư mục cho ứng dụng
 WORKDIR /app
@@ -23,5 +28,3 @@ EXPOSE 80
 
 # Khởi động Apache
 CMD ["apachectl", "-D", "FOREGROUND"]
-
-
